@@ -49,20 +49,6 @@ func (mr *MockInventoryServiceMockRecorder) ActivateInventory(arg0, arg1, arg2 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "ActivateInventory", reflect.TypeOf((*MockInventoryService)(nil).ActivateInventory), arg0, arg1, arg2)
 }
 
-// Adjust mocks base method.
-func (m *MockInventoryService) Adjust(arg0 context.Context, arg1 string, arg2 []model.InventoryAdjustItemInput) error {
-	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "Adjust", arg0, arg1, arg2)
-	ret0, _ := ret[0].(error)
-	return ret0
-}
-
-// Adjust indicates an expected call of Adjust.
-func (mr *MockInventoryServiceMockRecorder) Adjust(arg0, arg1, arg2 interface{}) *gomock.Call {
-	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Adjust", reflect.TypeOf((*MockInventoryService)(nil).Adjust), arg0, arg1, arg2)
-}
-
 // Update mocks base method.
 func (m *MockInventoryService) Update(arg0 context.Context, arg1 string, arg2 model.InventoryItemUpdateInput) error {
 	m.ctrl.T.Helper()

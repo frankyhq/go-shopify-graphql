@@ -10,7 +10,6 @@ import (
 //go:generate mockgen -destination=./mock/inventory_service.go -package=mock . InventoryService
 type InventoryService interface {
 	Update(ctx context.Context, id string, input model.InventoryItemUpdateInput) error
-	Adjust(ctx context.Context, locationID string, input []model.InventoryAdjustItemInput) error
 	AdjustQuantities(ctx context.Context, reason, name string, referenceDocumentUri *string, changes []model.InventoryChangeInput) error
 	SetOnHandQuantities(ctx context.Context, reason string, referenceDocumentUri *string, setQuantities []model.InventorySetQuantityInput) error
 	ActivateInventory(ctx context.Context, locationID string, id string) error
@@ -65,24 +64,6 @@ func (s *InventoryServiceOp) Update(ctx context.Context, id string, input model.
 
 	if len(m.InventoryItemUpdateResult.UserErrors) > 0 {
 		return fmt.Errorf("%+v", m.InventoryItemUpdateResult.UserErrors)
-	}
-
-	return nil
-}
-
-func (s *InventoryServiceOp) Adjust(ctx context.Context, locationID string, input []model.InventoryAdjustItemInput) error {
-	m := mutationInventoryBulkAdjustQuantityAtLocation{}
-	vars := map[string]interface{}{
-		"locationId":               locationID,
-		"inventoryItemAdjustments": input,
-	}
-	err := s.client.gql.Mutate(ctx, &m, vars)
-	if err != nil {
-		return fmt.Errorf("mutation: %w", err)
-	}
-
-	if len(m.InventoryBulkAdjustQuantityAtLocationResult.UserErrors) > 0 {
-		return fmt.Errorf("%+v", m.InventoryBulkAdjustQuantityAtLocationResult.UserErrors)
 	}
 
 	return nil
