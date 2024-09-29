@@ -19,6 +19,10 @@ type OrderService interface {
 	ListAfterCursor(ctx context.Context, opts ListOptions) ([]model.Order, *string, *string, error)
 
 	Update(ctx context.Context, input model.OrderInput) error
+
+	CaptureTransaction(ctx context.Context, input model.OrderCaptureInput) error
+
+	VoidTransaction(ctx context.Context, input model.OrderCaptureInput) error
 }
 
 type OrderServiceOp struct {
@@ -31,6 +35,18 @@ type mutationOrderUpdate struct {
 	OrderUpdateResult struct {
 		UserErrors []model.UserError `json:"userErrors,omitempty"`
 	} `graphql:"orderUpdate(input: $input)" json:"orderUpdate"`
+}
+
+type mutationOrderCaptureTransaction struct {
+	OrderCaptureTransactionResult struct {
+		UserErrors []model.UserError `json:"userErrors,omitempty"`
+	} `graphql:"orderCapture(input: $input)" json:"orderCapture"`
+}
+
+type mutationOrderVoidTransaction struct {
+	OrderVoidTransactionResult struct {
+		UserErrors []model.UserError `json:"userErrors,omitempty"`
+	} `graphql:"transactionVoid(input: $input)" json:"transactionVoid"`
 }
 
 const orderBaseQuery = `
@@ -424,6 +440,42 @@ func (s *OrderServiceOp) Update(ctx context.Context, input model.OrderInput) err
 
 	if len(m.OrderUpdateResult.UserErrors) > 0 {
 		return fmt.Errorf("%+v", m.OrderUpdateResult.UserErrors)
+	}
+
+	return nil
+}
+
+func (s *OrderServiceOp) CaptureTransaction(ctx context.Context, input model.OrderCaptureInput) error {
+	m := mutationOrderCaptureTransaction{}
+
+	vars := map[string]interface{}{
+		"input": input,
+	}
+	err := s.client.gql.Mutate(ctx, &m, vars)
+	if err != nil {
+		return fmt.Errorf("mutation: %w", err)
+	}
+
+	if len(m.OrderCaptureTransactionResult.UserErrors) > 0 {
+		return fmt.Errorf("%+v", m.OrderCaptureTransactionResult.UserErrors)
+	}
+
+	return nil
+}
+
+func (s *OrderServiceOp) VoidTransaction(ctx context.Context, input model.OrderCaptureInput) error {
+	m := mutationOrderVoidTransaction{}
+
+	vars := map[string]interface{}{
+		"input": input,
+	}
+	err := s.client.gql.Mutate(ctx, &m, vars)
+	if err != nil {
+		return fmt.Errorf("mutation: %w", err)
+	}
+
+	if len(m.OrderVoidTransactionResult.UserErrors) > 0 {
+		return fmt.Errorf("%+v", m.OrderVoidTransactionResult.UserErrors)
 	}
 
 	return nil
