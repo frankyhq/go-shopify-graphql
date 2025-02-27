@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/r0busta/go-shopify-graphql-model/v3/graph/model"
+	"github.com/r0busta/go-shopify-graphql-model/v4/graph/model"
 )
 
 //go:generate mockgen -destination=./mock/product_service.go -package=mock . ProductService
@@ -15,15 +15,17 @@ type ProductService interface {
 
 	Get(ctx context.Context, id string) (*model.Product, error)
 
-	Create(ctx context.Context, product model.ProductInput) (*string, error)
+	Create(ctx context.Context, product model.ProductCreateInput, media []model.CreateMediaInput) (*string, error)
 
-	Update(ctx context.Context, product model.ProductInput) error
+	Update(ctx context.Context, product model.ProductUpdateInput, media []model.CreateMediaInput) error
 
 	Delete(ctx context.Context, product model.ProductDeleteInput) error
 
-	VariantsBulkCreate(ctx context.Context, id string, input []model.ProductVariantsBulkInput) error
+	VariantsBulkCreate(ctx context.Context, id string, input []model.ProductVariantsBulkInput, strategy model.ProductVariantsBulkCreateStrategy) error
 	VariantsBulkUpdate(ctx context.Context, id string, input []model.ProductVariantsBulkInput) error
 	VariantsBulkReorder(ctx context.Context, id string, input []model.ProductVariantPositionInput) error
+
+	MediaCreate(ctx context.Context, id string, input []model.CreateMediaInput) error
 }
 
 type ProductServiceOp struct {
@@ -39,13 +41,13 @@ type mutationProductCreate struct {
 		} `json:"product,omitempty"`
 
 		UserErrors []model.UserError `json:"userErrors,omitempty"`
-	} `graphql:"productCreate(input: $input)" json:"productCreate"`
+	} `graphql:"productCreate(product: $product, media: $media)" json:"productCreate"`
 }
 
 type mutationProductUpdate struct {
 	ProductUpdateResult struct {
 		UserErrors []model.UserError `json:"userErrors,omitempty"`
-	} `graphql:"productUpdate(input: $input)" json:"productUpdate"`
+	} `graphql:"productUpdate(product: $product, media: $media)" json:"productUpdate"`
 }
 
 type mutationProductDelete struct {
@@ -57,7 +59,7 @@ type mutationProductDelete struct {
 type mutationProductVariantsBulkCreate struct {
 	ProductVariantsBulkCreateResult struct {
 		UserErrors []model.UserError `json:"userErrors,omitempty"`
-	} `graphql:"productVariantsBulkCreate(productId: $productId, variants: $variants)" json:"productVariantsBulkCreate"`
+	} `graphql:"productVariantsBulkCreate(productId: $productId, variants: $variants, strategy: $strategy)" json:"productVariantsBulkCreate"`
 }
 
 type mutationProductVariantsBulkUpdate struct {
@@ -72,11 +74,18 @@ type mutationProductVariantsBulkReorder struct {
 	} `graphql:"productVariantsBulkReorder(positions: $positions, productId: $productId)" json:"productVariantsBulkReorder"`
 }
 
+type mutationProductCreateMedia struct {
+	ProductCreateMediaResult struct {
+		MediaUserErrors []model.UserError `json:"mediaUserErrors,omitempty"`
+	} `graphql:"productCreateMedia(productId: $productId, media: $media)" json:"productCreateMedia"`
+}
+
 const productBaseQuery = `
 	id
 	legacyResourceId
 	handle
 	options{
+		id
 		name
 		values
 		position
@@ -128,6 +137,10 @@ var productQuery = fmt.Sprintf(`
 				selectedOptions{
 					name
 					value
+					optionValue{
+						id
+						name
+					}
 				}
 				position
 				image {
@@ -142,7 +155,8 @@ var productQuery = fmt.Sprintf(`
 				inventoryQuantity
 				inventoryItem{
 					id
-					legacyResourceId							
+					legacyResourceId	
+					sku						
 				}
 				availableForSale
 			}
@@ -178,6 +192,10 @@ var productBulkQuery = fmt.Sprintf(`
 				selectedOptions{
 					name
 					value
+					optionValue{
+						id
+						name
+					}
 				}
 				position
 				image {
@@ -192,7 +210,8 @@ var productBulkQuery = fmt.Sprintf(`
 				inventoryQuantity
 				inventoryItem{
 					id
-					legacyResourceId							
+					legacyResourceId
+					sku							
 				}
 				availableForSale
 			}
@@ -294,11 +313,12 @@ func (s *ProductServiceOp) getPage(ctx context.Context, id string, cursor string
 	return out.Product, nil
 }
 
-func (s *ProductServiceOp) Create(ctx context.Context, product model.ProductInput) (*string, error) {
+func (s *ProductServiceOp) Create(ctx context.Context, product model.ProductCreateInput, media []model.CreateMediaInput) (*string, error) {
 	m := mutationProductCreate{}
 
 	vars := map[string]interface{}{
-		"input": product,
+		"product": product,
+		"media":   media,
 	}
 
 	err := s.client.gql.Mutate(ctx, &m, vars)
@@ -313,11 +333,12 @@ func (s *ProductServiceOp) Create(ctx context.Context, product model.ProductInpu
 	return &m.ProductCreateResult.Product.ID, nil
 }
 
-func (s *ProductServiceOp) Update(ctx context.Context, product model.ProductInput) error {
+func (s *ProductServiceOp) Update(ctx context.Context, product model.ProductUpdateInput, media []model.CreateMediaInput) error {
 	m := mutationProductUpdate{}
 
 	vars := map[string]interface{}{
-		"input": product,
+		"product": product,
+		"media":   media,
 	}
 	err := s.client.gql.Mutate(ctx, &m, vars)
 	if err != nil {
@@ -349,12 +370,13 @@ func (s *ProductServiceOp) Delete(ctx context.Context, product model.ProductDele
 	return nil
 }
 
-func (s *ProductServiceOp) VariantsBulkCreate(ctx context.Context, id string, input []model.ProductVariantsBulkInput) error {
+func (s *ProductServiceOp) VariantsBulkCreate(ctx context.Context, id string, input []model.ProductVariantsBulkInput, strategy model.ProductVariantsBulkCreateStrategy) error {
 	m := mutationProductVariantsBulkCreate{}
 
 	vars := map[string]interface{}{
 		"productId": id,
 		"variants":  input,
+		"strategy":  strategy,
 	}
 	err := s.client.gql.Mutate(ctx, &m, vars)
 	if err != nil {
@@ -401,6 +423,26 @@ func (s *ProductServiceOp) VariantsBulkReorder(ctx context.Context, id string, i
 
 	if len(m.ProductVariantsBulkReorderResult.UserErrors) > 0 {
 		return fmt.Errorf("%+v", m.ProductVariantsBulkReorderResult.UserErrors)
+	}
+
+	return nil
+}
+
+func (s *ProductServiceOp) MediaCreate(ctx context.Context, id string, input []model.CreateMediaInput) error {
+	m := mutationProductCreateMedia{}
+
+	vars := map[string]interface{}{
+		"productId": id,
+		"media":     input,
+	}
+
+	err := s.client.gql.Mutate(ctx, &m, vars)
+	if err != nil {
+		return fmt.Errorf("mutation: %w", err)
+	}
+
+	if len(m.ProductCreateMediaResult.MediaUserErrors) > 0 {
+		return fmt.Errorf("%+v", m.ProductCreateMediaResult.MediaUserErrors)
 	}
 
 	return nil
